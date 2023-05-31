@@ -1,0 +1,144 @@
+# @Software : PyCharm
+import pandas
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+
+df = pd.read_csv('ABNYC.csv')
+print(df.head())
+print(df.shape)
+print(df.columns)
+# display all columns
+pd.set_option('display.max_columns', 16)
+print(df.isnull().sum())
+print(df.duplicated().sum())
+# cancel scientific notation
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+print(df.describe())
+print(df.info())
+
+# filling missing values
+airbnb = df.copy()
+
+airbnb['reviews_per_month'].fillna(0, inplace=True)
+airbnb['name'].fillna('Unknown', inplace=True)
+airbnb['host_name'].fillna('Unknown', inplace=True)
+airbnb.drop('last_review', axis=1, inplace=True)
+
+print(airbnb.isnull().sum())
+print(airbnb.info())
+
+# data cleaning
+print(airbnb['price'].value_counts())
+print(airbnb.loc[airbnb['price'] == 0])
+
+airbnb = airbnb[(airbnb.price > 0)]
+print(airbnb.info())
+
+airbnb.loc[airbnb['minimum_nights'] > 365, 'minimum_nights'] = 365
+print(airbnb['minimum_nights'].sort_values(ascending=False))
+
+# Visualization
+most_reviewed = airbnb['number_of_reviews'].groupby(airbnb['neighbourhood_group'])
+print(most_reviewed.sum())
+reviews = pandas.DataFrame(most_reviewed.sum())
+
+room_reviews = airbnb.pivot_table('number_of_reviews', index='neighbourhood_group', columns='room_type', aggfunc='sum')
+print(room_reviews)
+
+room_avg_price = airbnb.pivot_table('price', index='neighbourhood_group', columns='room_type', aggfunc='mean')
+print(room_avg_price)
+
+
+plt.figure(figsize=(15, 15))
+ax1 = plt.subplot2grid((2, 2), (0, 0), colspan=2, rowspan=1)
+reviews.plot(kind='barh', title='number of reviews by locations', ax=ax1)
+
+ax2 = plt.subplot2grid((2, 2), (1, 0), colspan=1, rowspan=1)
+room_reviews.plot(kind='bar', title='number of reviews by location and room types', ax=ax2)
+
+ax3 = plt.subplot2grid((2, 2), (1, 1), colspan=1, rowspan=1)
+room_avg_price.plot(kind='bar', title='AVG price by location and room types', ax=ax3)
+
+
+top50 = airbnb.sort_values(by='number_of_reviews', ascending=False).head(50)
+top50_room_type = pd.crosstab(top50['neighbourhood_group'], top50['room_type'])
+print(top50['minimum_nights'].value_counts())
+print(top50_room_type)
+print(top50['price'].mean())
+
+# geographical visualization
+import geopandas
+import geoplot as gplt
+import geoplot.crs as gcrs
+import mapclassify as mc
+
+nyc = geopandas.read_file('nymap.geojson')
+airbnb_map = airbnb.copy()
+print(nyc.head())
+nyc_map = geopandas.GeoDataFrame(airbnb_map, geometry=geopandas.points_from_xy(airbnb_map.longitude, airbnb_map.latitude))
+print(nyc_map)
+ax = gplt.kdeplot(nyc_map, cmap='RdPu', projection=gcrs.WebMercator(), fill=True)
+gplt.pointplot(nyc_map, s=1, color='blue', ax=ax)
+gplt.webmap(nyc_map, ax=ax)
+plt.title('NYC AirBnB 2019', fontsize=10)
+
+scheme = mc.Quantiles(nyc_map['price'], k=5)
+
+ax = gplt.polyplot(
+    nyc,
+    zorder=-1,
+    linewidth=1,
+    projection=gcrs.AlbersEqualArea(),
+    edgecolor='black',
+    facecolor='lightgray'
+)
+gplt.pointplot(
+    nyc_map,
+    scale='price',
+    limits=(2, 20),
+    hue='price',# use different colour to represent different price group
+    cmap='Blues',
+    scheme=scheme,
+    legend=True,
+    legend_var='scale',
+    legend_values=[200, 400, 600, 800, 10000],# set price in 5 different levels
+    legend_labels=['200', '400', '600', '800', '>800'],
+    legend_kwargs={'frameon': False, 'loc': 'lower right'},
+    ax=ax
+)
+
+plt.title("The location of different prices of airbnb in NYC, 2019", fontsize=10)
+
+ax = gplt.polyplot(
+    nyc, projection=gcrs.AlbersEqualArea(),
+    edgecolor='black', facecolor='lightgray'
+)
+gplt.pointplot(
+    nyc_map[nyc_map['neighbourhood_group'].notnull()],
+    hue='neighbourhood_group', cmap='inferno', ax=ax, legend=True
+)
+
+plt.title('NYC AirBnB Locations, 2019', fontsize=10)
+
+ax = gplt.polyplot(
+    nyc, projection=gcrs.AlbersEqualArea(),
+    edgecolor='None', facecolor='lightgray'
+)
+gplt.pointplot(
+    nyc_map[nyc_map['room_type'].notnull()],
+    hue='room_type', cmap='tab20b', ax=ax, legend=True
+)
+
+plt.title('Different room type of AirBnB in each Locations, 2019', fontsize=10)
+
+plt.show()
+
+
+
+
+
+
+
+
